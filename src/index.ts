@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -9,6 +12,8 @@ import { Auth, type AuthEvent, type RunResult } from "./auth.js";
 const username = process.env.TRON_USER;
 const password = process.env.TRON_PASS;
 const baseUrl = process.env.TRON_BASE_URL ?? "https://tronclass.ntou.edu.tw";
+const downloadDir =
+  process.env.TRON_DOWNLOAD_DIR ?? join(homedir(), "Downloads", "tronclass");
 
 if (!username || !password) {
   console.error("請在 MCP server 的 env 設定 TRON_USER 與 TRON_PASS。");
@@ -169,6 +174,63 @@ server.registerTool(
     runTool("list_homework", { course_id }, () =>
       tron.getHomeworkActivitiesByCourseId(course_id)
     )
+);
+
+server.registerTool(
+  "list_materials",
+  {
+    title: "課程教材",
+    description:
+      "列出某門課的學習活動（教材、作業、影片、連結等）與附件。要下載附件時，用附件的 reference_id 呼叫 download_material。",
+    inputSchema: {
+      course_id: z.number().int().describe("課程 ID，可從 list_courses 取得"),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  ({ course_id }) =>
+    runTool("list_materials", { course_id }, async () =>
+      (await tron.getCourseActivities(course_id)).map((a) => ({
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        start_time: a.start_time,
+        end_time: a.end_time,
+        uploads: (a.uploads ?? []).map((u) => ({
+          reference_id: u.reference_id,
+          name: u.name,
+          size: u.size,
+          allow_download: u.allow_download,
+        })),
+      }))
+    )
+);
+
+server.registerTool(
+  "download_material",
+  {
+    title: "下載教材附件",
+    description: `把附件下載到本機的 ${downloadDir}，回傳檔案路徑。reference_id 來自 list_materials。`,
+    inputSchema: {
+      reference_id: z
+        .number()
+        .int()
+        .describe("附件的 reference_id，可從 list_materials 取得"),
+    },
+    annotations: { destructiveHint: false, idempotentHint: true },
+  },
+  ({ reference_id }) =>
+    runTool("download_material", { reference_id }, async () => {
+      const file = await tron.downloadUpload(reference_id);
+      // 只取檔名部分，避免伺服器給的檔名跳出下載目錄
+      const name = basename((file.filename ?? "").replace(/\\/g, "/"));
+      const path = join(
+        downloadDir,
+        ["", ".", ".."].includes(name) ? `upload-${reference_id}` : name
+      );
+      await mkdir(downloadDir, { recursive: true });
+      await writeFile(path, file.data);
+      return { path, size: file.data.length, content_type: file.contentType };
+    })
 );
 
 await server.connect(new StdioServerTransport());

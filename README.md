@@ -14,6 +14,8 @@
 | `list_courses` | 我的課程（含課程 ID） |
 | `list_recent_courses` | 最近瀏覽的課程 |
 | `list_homework(course_id)` | 某門課的作業 |
+| `list_materials(course_id)` | 某門課的學習活動（教材、作業、影片等）與附件 |
+| `download_material(reference_id)` | 下載附件到本機，回傳檔案路徑 |
 
 時間欄位都是 UTC。
 
@@ -47,6 +49,7 @@ npm run build
 | `TRON_USER` | 學號 |
 | `TRON_PASS` | 密碼 |
 | `TRON_BASE_URL` | 選填，預設 `https://tronclass.ntou.edu.tw` |
+| `TRON_DOWNLOAD_DIR` | 選填，附件下載目錄，預設 `~/Downloads/tronclass` |
 
 ### Claude Code
 
