@@ -314,7 +314,7 @@ User-Agent: <一般瀏覽器 UA，不要用函式庫預設的 UA>
 
 ## 13. RL（tronclass-api）要先修的地方
 
-✅ = 已在 branch `fix/mcp-readiness` 修正（`e7623fa`、`544942b`、`26371ff`）。
+✅ = 已在 branch `fix/session-and-types` 修正（`e7623fa`、`544942b`、`26371ff`）。
 
 | # | 問題 | 位置 |
 |---|---|---|
