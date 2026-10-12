@@ -98,17 +98,17 @@ claude mcp add -s user tronclass -- node --env-file=$HOME/.config/tronclass-mcp/
 
 ## 登入流程
 
-海大 CAS 登入頁需要 4 位數字的圖片驗證碼，本專案把驗證碼交給 MCP client 端的模型辨識：
+登入由 tronclass-api 處理，會先走 CAS 的 REST 協定，只用帳密就能登入，**不需要驗證碼**。任何 tool 在還沒登入或 session 過期時都會自動登入，使用上不必理會登入。
 
-1. 任何 tool 在還沒登入、或 session 過期需要重新登入時，會回傳驗證碼圖片。
+- 帳號或密碼錯誤時**不會**自動重試，以免帳號被鎖；其他 tool 也不會再自動登入，確認帳密後再呼叫 `login`。
+
+只有 CAS REST 無法使用時，才會改走 CAS 登入頁，這時需要 4 位數字的圖片驗證碼，交給 MCP client 端的模型辨識：
+
+1. tool 會回傳驗證碼圖片。
 2. 模型看圖後呼叫 `submit_captcha`。
 3. 登入成功後，回應會列出剛才因為需要登入而沒有完成的 tool，模型再重新呼叫一次。
 
-- 驗證碼錯誤時會自動換一張新的，連續錯 5 次會停下來，稍後再呼叫 `login`。
-- 帳號或密碼錯誤時**不會**自動重試，以免帳號被鎖；其他 tool 也不會再自動登入，確認帳密後再呼叫 `login`。
-- 驗證碼放超過 5 分鐘會自動換新。
-
-部分模型可能會拒絕辨識驗證碼。
+驗證碼錯誤時會自動換一張新的，連續錯 5 次會停下來；驗證碼放超過 5 分鐘會自動換新。部分模型可能會拒絕辨識驗證碼。
 
 ## Tools
 
@@ -118,8 +118,8 @@ claude mcp add -s user tronclass -- node --env-file=$HOME/.config/tronclass-mcp/
 
 | Tool | 說明 |
 |---|---|
-| `login` | 開始登入，回傳驗證碼圖片 |
-| `submit_captcha(code)` | 送出驗證碼完成登入 |
+| `login` | 登入（通常不需要；其他 tool 會自動登入） |
+| `submit_captcha(code)` | 需要驗證碼時，送出驗證碼完成登入 |
 | `whoami` | 目前使用者（id、姓名、學號、系所） |
 | `list_semesters` | 我的學期 |
 | `list_notifications(limit?, types?)` | 通知與未讀數量 |

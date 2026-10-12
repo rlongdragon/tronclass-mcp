@@ -299,7 +299,7 @@ server.registerTool(
   {
     title: "登入 TronClass",
     description:
-      "開始登入海大 TronClass，回傳 4 位數字驗證碼圖片。辨識後呼叫 submit_captcha。其他 tool 在需要登入時也會自動回傳驗證碼。自動登入因帳密錯誤或驗證碼連續錯誤而停止後，也用這個 tool 重新開始。",
+      "登入海大 TronClass。通常直接用帳密完成登入，不需要驗證碼；其他 tool 在需要時也會自動登入。只有免驗證碼登入無法使用時才會回傳 4 位數字驗證碼圖片，辨識後呼叫 submit_captcha。自動登入因帳密錯誤或驗證碼連續錯誤而停止後，也用這個 tool 重新開始。",
   },
   async () => {
     if (auth.ready) return text("已經登入。");
