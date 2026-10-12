@@ -3,7 +3,27 @@
 > 目標站台：`https://tronclass.ntou.edu.tw`　CAS：`https://tccas.ntou.edu.tw`
 > 範圍：**查詢 + 繳交作業**。不含點名、不含考試作答。
 > 底層 lib：[rlongdragon/tronclass-api](https://github.com/rlongdragon/tronclass-api)（以下簡稱 **RL**）
-> 整理日期：2026-10-12。以下 endpoint 都是從開源專案彙整的，**還沒在海大登入後實測過**。
+> 整理日期：2026-10-12。endpoint 原本從開源專案彙整，下方「海大實測紀錄」列出已在海大登入後確認的部分。
+
+## 海大實測紀錄（2026-10-12）
+
+以下 endpoint 已用學生帳號在 `tronclass.ntou.edu.tw` 實測，回應為 200 + JSON（下載為檔案本體），欄位已反映在 RL 的型別：
+
+| 區塊 | Endpoint | 備註 |
+|---|---|---|
+| 登入 | CAS 表單 + `captcha.jpg` | 驗證碼錯誤時 `#msg` 為「驗證碼不正確」；`execution` 從表單讀取 |
+| 使用者 | `/api/profile`、`/api/my-semesters`、`/api/my-academic-years` | |
+| 課程 | `/api/my-courses`（`conditions={"status":["ongoing"]}` 有效）、`/api/courses/{id}`、`/api/courses/{id}/modules` | 課程有 `academic_year`、`semester` 物件，沒有 `*_id`；章節是 `is_hidden` |
+| 待辦 | `/api/todos` | 沒有 `start_time` |
+| 公告 | `/api/course-bulletins`（含 `course_ids`）、`/api/courses/{id}/bulletins`、`/api/org-bulletin/bulletins` | |
+| 通知 | `/ntf/users/{uid}/notifications` | 有 `unread_count`，沒有 `total_count` |
+| 活動與教材 | `/api/courses/{id}/activities?sub_course_id=0`、`/api/activities/{id}` | |
+| 下載 | `/api/uploads/reference/{rid}/blob`、`/api/uploads/reference/document/{rid}/url?preview=true` | blob 會轉址到 `tcmedia.ntou.edu.tw`；`allow_download=false` 只是前端限制 |
+| 作業 | `/api/courses/{id}/homework-activities`、`/api/activities/{aid}/students/{uid}/submission_list` | |
+| 考試成績 | `/api/courses/{id}/exam-list`、`/api/courses/{id}/exam-scores` | 測試的課程沒有考試，只確認 endpoint 可用 |
+| 討論區 | `/api/courses/{id}/topic-categories`、`/api/forum/categories/{id}` | 測試的討論區沒有主題，主題欄位未確認 |
+
+**尚未實測**：繳交作業的寫入流程（`/api/uploads`、`submissions`、`retract`）只用 mock 測過；通知的 `types` 篩選格式未確認。
 
 ## 信心標記
 
@@ -286,6 +306,8 @@ User-Agent: <一般瀏覽器 UA，不要用函式庫預設的 UA>
 
 ## 12. MCP tool 草案
 
+> 這是最初的規劃，實際 tool 名稱與參數以 [README](../README.md) 為準。除了 `raw_get` 之外都已實作（登入改為 `login` / `submit_captcha`，教材為 `list_materials` / `download_material`）。
+
 | 階段 | Tool | 對應 endpoint | 備註 |
 |---|---|---|---|
 | P0 | `login_begin` | `/login` → `captcha.jpg` | 回傳驗證碼圖片（image content） |
@@ -314,19 +336,19 @@ User-Agent: <一般瀏覽器 UA，不要用函式庫預設的 UA>
 
 ## 13. RL（tronclass-api）要先修的地方
 
-✅ = 已在 branch `fix/session-and-types` 修正（`e7623fa`、`544942b`、`26371ff`）。
+✅ = 已修正。1–3 在 branch `fix/session-and-types`（`e7623fa`、`544942b`、`26371ff`），5–10 在 `feat/full-api`（`b363b2e`）。
 
 | # | 問題 | 位置 |
 |---|---|---|
 | 1 ✅ | `console.log` 會寫進 stdout，**弄壞 MCP stdio 傳輸**，而且會印出帳號 | `src/index.ts:157`、`:178` |
 | 2 ✅ | `src/types/index.ts` 沒 commit，重新 clone 後 build 會失敗 | `src/index.ts:2-8` |
 | 3 ✅ | 偵測不到 session 過期：`loggedIn` 不會被設回 false，也沒檢查導向 tccas 的 302 | `call()` `:236-283` |
-| 4 | 沒更新 `X-SESSION-ID` | `fetcher` |
-| 5 | 驗證碼錯會被當成密碼錯；OCR 結果不是 4 位數字時直接 return，沒有重試 | `:133-139`、`:170` |
-| 6 | `myCourses` 的參數沒用到 | `:297-305` |
-| 7 | `homework-activities` 沒處理分頁 | `:307-315` |
-| 8 | 速率限制超過時直接丟錯，應該改成 await 等待 | `rateLimiter()` |
-| 9 | 沒檢查 `res.ok` | 所有 API 方法 |
-| 10 | `login()` 用 `.split(".tw/")` 推算 CAS 網址；只服務海大的話，直接寫死 `tccas.ntou.edu.tw` 就好 | `:108` |
+| 4 — | 沒更新 `X-SESSION-ID`（不需要：cookie jar 會跟著 `Set-Cookie` 更新 session） | `fetcher` |
+| 5 ✅ | 驗證碼錯會被當成密碼錯；現在回傳 `reason`，CAS 說驗證碼錯時自動重試 | `login()` |
+| 6 ✅ | `myCourses` 的參數沒用到 | `myCourses()` |
+| 7 ✅ | `homework-activities` 沒處理分頁 | `getAllPages()` |
+| 8 ✅ | 速率限制超過時直接丟錯；現在排隊等待，超過 `rateLimitMaxWaitMs` 才丟錯 | `waitForRateLimit()` |
+| 9 ✅ | 沒檢查 `res.ok`；現在統一由 `requestJson` 檢查並拋出 `ApiError` | `requestJson()` |
+| 10 ✅ | `login()` 用 `.split(".tw/")` 推算 CAS 網址；現在用轉址後 URL 的 origin | `login()` |
 
 可以從 S7 借用的部分（MIT，記得保留授權聲明）：錯誤類別分層、`getJson` 檢查 `res.ok`、指數退避重試、自動翻頁加上限、下載時解析 `Content-Disposition`。
