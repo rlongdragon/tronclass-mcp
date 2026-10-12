@@ -16,11 +16,12 @@
 | `list_semesters` | 我的學期 |
 | `list_recent_courses` | 最近瀏覽的課程 |
 | `get_course_modules(course_id)` | 某門課的週次／章節 |
+| `get_my_groups(course_id)` | 某門課的分組，以及我所在的組別與組員 |
 | `list_announcements(course_id?, keyword?, start_date?, end_date?, page?)` | 課程公告（不指定課程時為所有課程），內容轉成純文字 |
 | `list_school_announcements(page?)` | 全校公告 |
 | `list_notifications(limit?, types?)` | 通知與未讀數量 |
 | `list_homework(course_id)` | 某門課的作業 |
-| `get_homework(activity_id)` | 作業詳情與我的歷次繳交、草稿、分數、評語 |
+| `get_homework(activity_id)` | 作業詳情與我的歷次繳交、草稿、分數、評語；分組作業附上組別與全組的繳交紀錄 |
 | `list_exams(course_id)` | 某門課的線上考試 |
 | `get_scores(course_id)` | 某門課的考試成績與作業分數 |
 | `list_forum_topics(course_id)` | 某門課各討論區的主題 |
@@ -33,7 +34,7 @@
 
 時間欄位都是 UTC。
 
-標示**寫入**的 tool 會改動 TronClass 資料，MCP annotation 標為 destructive。正式繳交與撤回前應先向使用者確認；建議流程是 `save_homework_draft` → 用 `get_homework` 確認草稿 → 使用者同意後 `submit_homework`。寫入途中需要重新登入時，該操作不會執行，登入後也不會自動重做。不支援分組作業；只能上傳一般檔案（不能是隱藏檔、隱藏目錄或 `/etc` 等系統目錄中的檔案），單檔上限 100 MB。
+標示**寫入**的 tool 會改動 TronClass 資料，MCP annotation 標為 destructive。正式繳交與撤回前應先向使用者確認；建議流程是 `save_homework_draft` → 用 `get_homework` 確認草稿 → 使用者同意後 `submit_homework`。寫入途中需要重新登入時，該操作不會執行，登入後也不會自動重做。分組作業目前只能查詢，不能存草稿或繳交；只能上傳一般檔案（不能是隱藏檔、隱藏目錄或 `/etc` 等系統目錄中的檔案），單檔上限 100 MB。
 
 lib 每分鐘最多送 60 個請求，需要排隊超過 20 秒時 tool 會直接回報「請求太頻繁」。
 

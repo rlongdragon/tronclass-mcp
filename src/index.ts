@@ -6,10 +6,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import {
+  ApiError,
   RateLimitError,
   type Activity,
   type Bulletin,
   type CreatedUpload,
+  type Group,
   type loginResponse,
   type Submission,
   type Upload,
@@ -196,6 +198,24 @@ const submission = (s: Submission) => ({
 
 const submissionsOf = async (activityId: number) =>
   (await tron.getSubmissionList(activityId, await getUserId())) ?? [];
+
+// 我在某個分組集合的組別；不在任何組時為 undefined
+const myGroupIn = (groupSetId: number) =>
+  tron.getMyGroup(groupSetId).catch((e) => {
+    if (e instanceof ApiError && e.status === 404) return undefined;
+    throw e;
+  });
+
+const groupInfo = (g: Group, me: number) => ({
+  id: g.id,
+  name: g.name,
+  members: (g.group_users ?? []).map((u) => ({
+    name: u.name,
+    user_no: u.user_no,
+    is_leader: g.leaders?.includes(u.id) ?? false,
+    is_me: u.id === me,
+  })),
+});
 
 // mode 為 multiple 的作業可選的題目（activity.data.multiple_choice[].title）
 const choiceTitles = (a: Activity) => {
@@ -415,6 +435,33 @@ server.registerTool(
 );
 
 server.registerTool(
+  "get_my_groups",
+  {
+    title: "我的分組",
+    description:
+      "列出某門課的分組（例如期末專案分組）以及我所在的組別與組員（姓名、學號、是否為組長）。",
+    inputSchema: { course_id: courseId },
+    annotations: { readOnlyHint: true },
+  },
+  ({ course_id }) =>
+    runTool("get_my_groups", { course_id }, async () => {
+      const me = await getUserId();
+      const sets = (await tron.getCourseGroupSets(course_id)) ?? [];
+      return Promise.all(
+        sets.map(async (s) => {
+          const group = await myGroupIn(s.id);
+          return {
+            group_set_id: s.id,
+            group_set_name: s.name,
+            group_count: s.group_count,
+            my_group: group ? groupInfo(group, me) : null,
+          };
+        })
+      );
+    })
+);
+
+server.registerTool(
   "list_announcements",
   {
     title: "課程公告",
@@ -536,15 +583,22 @@ server.registerTool(
   {
     title: "作業詳情",
     description:
-      "作業的說明、時間（UTC）、繳交次數與能否撤回、老師附件，以及我的歷次繳交與草稿（含分數、評語、檔案）。",
+      "作業的說明、時間（UTC）、繳交次數與能否撤回、老師附件，以及我的歷次繳交與草稿（含分數、評語、檔案）。分組作業會附上我的組別，繳交紀錄為全組的。",
     inputSchema: { activity_id: activityId },
     annotations: { readOnlyHint: true },
   },
   ({ activity_id }) =>
     runTool("get_homework", { activity_id }, async () => {
       const a = await tron.getActivity(activity_id);
-      const submissions = await submissionsOf(activity_id);
+      const group =
+        a.submit_by_group && a.group_set_id
+          ? await myGroupIn(a.group_set_id)
+          : undefined;
+      const submissions = group
+        ? ((await tron.getGroupSubmissionList(activity_id, group.id)) ?? [])
+        : await submissionsOf(activity_id);
       return {
+        group: group ? groupInfo(group, await getUserId()) : undefined,
         id: a.id,
         title: a.title,
         description: htmlToText(a.data?.description),
