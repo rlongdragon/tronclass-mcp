@@ -14,7 +14,7 @@
   "license": "ISC",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
-    "tronclass-api": "file:../tronclass-api",
+    "tronclass-api": "github:rlongdragon/tronclass-api#feat/full-api",
     "zod": "^4.6.6"
   },
   "devDependencies": {
