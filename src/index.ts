@@ -54,11 +54,24 @@ async function authEventResult(
 ): Promise<CallToolResult> {
   if (event.type === "timeout") return timeoutResult();
   if (event.type === "captcha") return captchaResult(event.image, captchaMessage);
-  if (event.result.success) return text("登入成功。若剛才有 tool 要求驗證碼，請重新呼叫它。");
+  if (event.result.success) {
+    const retry = [...toolsToRetry];
+    toolsToRetry.clear();
+    return text(
+      retry.length ? `登入成功。請重新呼叫：${retry.join("、")}` : "登入成功。"
+    );
+  }
   return loginFailed(event.result.message);
 }
 
-async function runTool<T>(op: () => Promise<T>): Promise<CallToolResult> {
+// 因需要登入而沒有完成的 tool 呼叫，登入成功後提示 agent 重新呼叫
+const toolsToRetry = new Set<string>();
+
+async function runTool<T>(
+  name: string,
+  args: Record<string, unknown>,
+  op: () => Promise<T>
+): Promise<CallToolResult> {
   let result: RunResult<T>;
   try {
     result = await auth.run(op);
@@ -68,10 +81,16 @@ async function runTool<T>(op: () => Promise<T>): Promise<CallToolResult> {
     }
     return text(e instanceof Error ? e.message : String(e), true);
   }
+  if (result.type !== "ok") {
+    toolsToRetry.add(
+      Object.keys(args).length ? `${name}(${JSON.stringify(args)})` : name
+    );
+  }
   if (result.type === "timeout") return timeoutResult();
   if (result.type === "captcha") return captchaResult(result.image, "需要登入 TronClass。");
   if (result.type === "login-failed") return loginFailed(result.message);
-  return text(JSON.stringify(result.value));
+  // lib 在回應缺少預期的 key 時會回傳 undefined，而 JSON.stringify(undefined) 不是字串
+  return text(JSON.stringify(result.value ?? null));
 }
 
 const server = new McpServer({ name: "tronclass-ntou", version: "0.1.0" });
@@ -113,7 +132,7 @@ server.registerTool(
     description: "列出 TronClass 待辦事項（未完成的作業、測驗等），含課程與截止時間（UTC）。",
     annotations: { readOnlyHint: true },
   },
-  () => runTool(() => tron.todos())
+  () => runTool("list_todos", {}, () => tron.todos())
 );
 
 server.registerTool(
@@ -123,7 +142,7 @@ server.registerTool(
     description: "列出我在 TronClass 上的所有課程，含課程 ID。",
     annotations: { readOnlyHint: true },
   },
-  () => runTool(() => tron.myCourses({}, undefined))
+  () => runTool("list_courses", {}, () => tron.myCourses({}, undefined))
 );
 
 server.registerTool(
@@ -133,7 +152,7 @@ server.registerTool(
     description: "列出最近瀏覽過的 TronClass 課程。",
     annotations: { readOnlyHint: true },
   },
-  () => runTool(() => tron.recentlyVisitedCourses())
+  () => runTool("list_recent_courses", {}, () => tron.recentlyVisitedCourses())
 );
 
 server.registerTool(
@@ -146,7 +165,10 @@ server.registerTool(
     },
     annotations: { readOnlyHint: true },
   },
-  ({ course_id }) => runTool(() => tron.getHomeworkActivitiesByCourseId(course_id))
+  ({ course_id }) =>
+    runTool("list_homework", { course_id }, () =>
+      tron.getHomeworkActivitiesByCourseId(course_id)
+    )
 );
 
 await server.connect(new StdioServerTransport());
