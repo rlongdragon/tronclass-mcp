@@ -129,6 +129,13 @@ export class Auth {
     return { promise, cancel: () => cancel() };
   }
 
+  /** 還原保存的 session：之後直接沿用，失效時由 lib 自動重新登入 */
+  async restoreSession(serialized: string) {
+    await this.tron.importSession(serialized);
+    this.tron.setCredentials(this.username, this.password, this.ocr);
+    this.loggedIn = true;
+  }
+
   /** 已登入，且沒有進行中的登入或等待中的驗證碼 */
   get ready() {
     return this.loggedIn && !this.tron.inFlight && !this.pending;

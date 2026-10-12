@@ -1,7 +1,22 @@
 #!/usr/bin/env node
-import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, extname, isAbsolute, join, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  resolve,
+  sep,
+} from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -36,10 +51,44 @@ if (!username || !password) {
   process.exit(1);
 }
 
+// 保存 session 的檔案，重啟後沿用以減少登入；設成空字串可停用
+const sessionFile =
+  process.env.TRON_SESSION_FILE ??
+  join(homedir(), ".config", "tronclass-mcp", "session.json");
+
 const auth = new Auth(username, password, baseUrl);
 const tron = auth.tron;
 // lib 預設超過速率限制時一直排隊；tool 呼叫不宜卡太久，要等超過 20 秒就回報錯誤
 tron.rateLimitMaxWaitMs = 20_000;
+
+let savedSession: string | undefined;
+
+// 還原上次保存的 session（同一個帳號才沿用）；檔案不存在或格式不對就照常登入
+if (sessionFile) {
+  try {
+    const saved = JSON.parse(await readFile(sessionFile, "utf8"));
+    if (saved.username === username && typeof saved.cookies === "string") {
+      await auth.restoreSession(saved.cookies);
+      savedSession = await tron.exportSession();
+    }
+  } catch {}
+}
+
+// session 有變動時寫回檔案；內容等同登入憑證，權限設為只有自己能讀
+async function saveSession() {
+  if (!sessionFile || !auth.ready) return;
+  try {
+    const cookies = await tron.exportSession();
+    if (cookies === savedSession) return;
+    await mkdir(dirname(sessionFile), { recursive: true, mode: 0o700 });
+    const tmp = `${sessionFile}.${process.pid}.tmp`;
+    await writeFile(tmp, JSON.stringify({ username, cookies }), { mode: 0o600 });
+    await rename(tmp, sessionFile);
+    savedSession = cookies;
+  } catch (e) {
+    console.error(`無法保存 session：${e instanceof Error ? e.message : e}`);
+  }
+}
 
 const text = (t: string, isError = false): CallToolResult => ({
   content: [{ type: "text", text: t }],
@@ -90,6 +139,7 @@ async function authEventResult(
   if (event.type === "timeout") return timeoutResult();
   if (event.type === "captcha") return captchaResult(event.image, captchaMessage);
   if (event.result.success) {
+    await saveSession();
     const retry = [...toolsToRetry];
     toolsToRetry.clear();
     return text(
@@ -134,6 +184,7 @@ async function runTool<T>(
     );
   }
   if (result.type === "login-failed") return loginFailed(result.result);
+  await saveSession();
   // lib 在回應缺少預期的 key 時會回傳 undefined，而 JSON.stringify(undefined) 不是字串
   return text(JSON.stringify(result.value ?? null));
 }

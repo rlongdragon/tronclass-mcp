@@ -95,10 +95,13 @@ claude mcp add -s user tronclass -- node --env-file=$HOME/.config/tronclass-mcp/
 | `TRON_PASS` | 密碼（必填） |
 | `TRON_BASE_URL` | 選填，預設 `https://tronclass.ntou.edu.tw` |
 | `TRON_DOWNLOAD_DIR` | 選填，教材下載目錄，預設 `~/Downloads/tronclass` |
+| `TRON_SESSION_FILE` | 選填，保存 session 的檔案，預設 `~/.config/tronclass-mcp/session.json`；設成空字串可停用 |
 
 ## 登入流程
 
 登入由 tronclass-api 處理，會先走 CAS 的 REST 協定，只用帳密就能登入，**不需要驗證碼**。任何 tool 在還沒登入或 session 過期時都會自動登入，使用上不必理會登入。
+
+session 會盡量重複利用：同一個 server 程序內只登入一次；session 也會保存到 `~/.config/tronclass-mcp/session.json`，重開 MCP client 後直接沿用，過期時才重新登入並更新檔案。
 
 - 帳號或密碼錯誤時**不會**自動重試，以免帳號被鎖；其他 tool 也不會再自動登入，確認帳密後再呼叫 `login`。
 
@@ -167,6 +170,7 @@ claude mcp add -s user tronclass -- node --env-file=$HOME/.config/tronclass-mcp/
 ## 隱私
 
 - 帳密只存在本機的 `~/.config/tronclass-mcp/.env`，只會送往海大的 CAS（`tccas.ntou.edu.tw`）。
+- 登入後的 session 保存在 `~/.config/tronclass-mcp/session.json`（權限 600），內容等同登入憑證，請勿分享；不想保存可把 `TRON_SESSION_FILE` 設成空字串。
 - 所有請求都直接從你的電腦送到海大的伺服器，沒有經過其他服務。
 - 查詢結果會交給你使用的 MCP client 與模型處理。
 - log 只寫到 stderr，不會記錄密碼（登入成功時會記錄學號）。
